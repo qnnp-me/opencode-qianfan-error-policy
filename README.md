@@ -37,7 +37,7 @@ The delay for retry `n` is `min(base × U(0.7, 1.3), 120000)`. OpenCode allows o
 Requirements: OpenCode v2, and a local checkout. The plugin has no runtime dependency and no build step.
 
 ```bash
-git clone https://github.com/qnnp-me/opencode-qianfan-error-policy.git ~/opencode-qianfan-error-policy
+git clone https://github.com/qnnp-me/opencode-qianfan-error-policy.git ~/.config/opencode/qianfan-error-policy
 ```
 
 Then add the directory to `plugins` in the OpenCode config (`~/.config/opencode/opencode.jsonc` for a global install, or `.opencode/opencode.jsonc` inside a project):
@@ -45,13 +45,11 @@ Then add the directory to `plugins` in the OpenCode config (`~/.config/opencode/
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
-  "plugins": ["/home/you/opencode-qianfan-error-policy"]
+  "plugins": ["~/.config/opencode/qianfan-error-policy"]
 }
 ```
 
-Use an absolute path (or `~/…`, which OpenCode expands). Restart OpenCode once so the plugin loads; retry decisions afterwards follow config changes without another restart.
-
-Alternative: copy `src/` into `.opencode/plugins/qianfan-error-policy/` — plugins there load automatically, and the `index.ts` at the root is picked up as the server part.
+Any stable directory works: the clone target above is only an example, so point `plugins` at wherever you cloned it. Use an absolute path (or `~/…`, which OpenCode expands). Restart OpenCode once so the plugin loads; retry decisions afterwards follow config changes without another restart.
 
 ## Verify
 
@@ -114,7 +112,7 @@ Temporarily, before the first load: remove the entry from `plugins`.
 ```bash
 # remove the "plugins" entry that points at opencode-qianfan-error-policy
 # then restart OpenCode, then remove the checkout and the config file
-rm -rf ~/opencode-qianfan-error-policy
+rm -rf ~/.config/opencode/qianfan-error-policy
 rm -f ~/.config/opencode/qianfan-error-policy.json ~/.cache/opencode/qianfan-error-policy.log
 ```
 
