@@ -51,6 +51,8 @@ Then add the directory to `plugins` in the OpenCode config (`~/.config/opencode/
 
 Any stable directory works: the clone target above is only an example, so point `plugins` at wherever you cloned it. Use an absolute path (or `~/…`, which OpenCode expands). Restart OpenCode once so the plugin loads; retry decisions afterwards follow config changes without another restart.
 
+Do not put the checkout under `~/.config/opencode/plugins/` or `~/.config/opencode/plugin/`: OpenCode v2 discovers both directories automatically, so the copy is registered a second time next to the explicit `plugins` entry and fails with `Duplicate plugin ID`. A directory at the config root, like the example path, is not auto-discovered.
+
 ## Verify
 
 ```bash
