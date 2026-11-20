@@ -273,11 +273,14 @@ export type LadderDecision =
 /**
  * Turn `(classification, attempt)` into a retry decision.
  *
- * OpenCode calls the retry hook only after its own policy proposes a retry, and
- * it bumps the attempt counter before reporting it: the first failure arrives
- * as `attempt = 2`, and the nth retry as `attempt = n + 1`. So the tier index
- * and the number of retries already scheduled are both `attempt - 2`; the
- * `max(0, ...)` clamp only guards a defensive `attempt = 1`.
+ * OpenCode calls the retry hook whenever its own retry schedule still has
+ * budget, including when the built-in decision is `{ retry: false }` — that is
+ * the case the plugin flips for Qianfan 429s. Once the schedule is exhausted
+ * the hook is not called again. The attempt counter is bumped before the call,
+ * so the first failure arrives as `attempt = 2` and the nth retry as
+ * `attempt = n + 1`; hence the tier index and the number of retries already
+ * scheduled are both `attempt - 2`, and `max(0, ...)` only guards a defensive
+ * `attempt = 1`.
  */
 export function ladder(
   classification: Pick<Classification, "kind" | "bases" | "cap">,

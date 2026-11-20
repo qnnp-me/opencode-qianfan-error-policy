@@ -68,7 +68,7 @@ tail -n 20 ~/.cache/opencode/qianfan-error-policy.log
 Each line looks like:
 
 ```
-2026-01-01T00:00:00.000Z plugin=qianfan-error-policy provider=baidu-qianfan-token-plan type=provider.quota message="Token Plan Person request rate limit exceeded …" category=rpm action=retry attempt=1 delayMs=3087 cap=9 reason="requests-per-minute limit; back off on a 3s..90s ladder"
+2026-01-01T00:00:00.000Z plugin=qianfan-error-policy provider=baidu-qianfan-token-plan type=provider.quota message="Token Plan Person request rate limit exceeded …" category=rpm action=retry attempt=2 delayMs=3087 cap=9 reason="requests-per-minute limit; back off on a 3s..90s ladder"
 ```
 
 `action` is `retry` or `fail`. `delayMs=none` means the plugin vetoed the retry. Messages are truncated to 512 characters and credential shapes (`Authorization`, `api_key`, `token=`, `sk-…`) are redacted before they are written.
