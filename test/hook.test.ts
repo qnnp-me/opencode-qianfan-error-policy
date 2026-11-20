@@ -95,7 +95,7 @@ function makeEvent(
       message: input.message ?? "rpm_rate_limit_exceeded",
       status: input.status ?? 429,
     },
-    attempt: input.attempt ?? 1,
+    attempt: input.attempt ?? 2,
     decision: { retry: true, delay: 2_000 },
   }
 }
@@ -137,13 +137,13 @@ test("AC2 hook: a real Qianfan RPM sample retries from the first tier and stops 
   const event = makeEvent({
     message:
       "Token Plan Person request rate limit exceeded (code=-32603, data={\"service\":\"session\",\"errorName\":\"provider.quota\"})",
-    attempt: 1,
+    attempt: 2,
   })
   h.emit(event)
   assert.equal(event.decision.retry, true)
   assert.ok(event.decision.delay >= 2_100 && event.decision.delay <= 3_900, String(event.decision.delay))
 
-  const atCap = makeEvent({ message: "coding_plan_rate_limit_exceeded", attempt: 10 })
+  const atCap = makeEvent({ message: "coding_plan_rate_limit_exceeded", attempt: 11 })
   h.emit(atCap)
   assert.deepEqual(atCap.decision, { retry: false })
 
@@ -156,7 +156,7 @@ test("AC4 hook: a non-Qianfan provider keeps OpenCode's own decision untouched",
   const h = await createHarness(t)
 
   for (const providerID of ["openai", "opencode", "anthropic", "baidu"]) {
-    const event = makeEvent({ providerID, message: "rpm_rate_limit_exceeded", attempt: 1 })
+    const event = makeEvent({ providerID, message: "rpm_rate_limit_exceeded", attempt: 2 })
     const before = event.decision
     h.emit(event)
     assert.equal(event.decision, before, providerID)
@@ -169,7 +169,7 @@ test("AC5 hook: the provider comes from event.model.providerID, not from a sessi
   const h = await createHarness(t)
   h.writeConfig({ enabled: true, logPath: h.logPath })
 
-  const event = makeEvent({ providerID: "baidu-qianfan-coding-plan", attempt: 1 })
+  const event = makeEvent({ providerID: "baidu-qianfan-coding-plan", attempt: 2 })
   h.emit(event)
   assert.equal(event.decision.retry, true)
   assert.ok((h.lines().at(0) as string).includes("provider=baidu-qianfan-coding-plan"))
@@ -179,7 +179,7 @@ test("AC8 hook: enabled:false changes nothing and writes no trace", async (t) =>
   const h = await createHarness(t)
   h.writeConfig({ enabled: false, logPath: h.logPath })
 
-  const event = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 1 })
+  const event = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 2 })
   const before = event.decision
   h.emit(event)
 
@@ -187,7 +187,7 @@ test("AC8 hook: enabled:false changes nothing and writes no trace", async (t) =>
   assert.equal(existsSync(h.logPath), false)
 
   h.writeConfig({ enabled: true, logPath: h.logPath })
-  const restored = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 1 })
+  const restored = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 2 })
   h.emit(restored)
   assert.equal(restored.decision.retry, true)
   assert.equal(h.lines().length, 1)
@@ -197,19 +197,19 @@ test("AC8 hook: a ladder edit applies on the next call without a restart", async
   const h = await createHarness(t)
   h.writeConfig({ enabled: true, logPath: h.logPath, ladders: { rpm: [3_000] } })
 
-  const before = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 1 })
+  const before = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 2 })
   h.emit(before)
   assert.ok(before.decision.retry === true)
   assert.ok(before.decision.delay >= 2_100 && before.decision.delay <= 3_900, String(before.decision.delay))
 
   h.writeConfig({ enabled: true, logPath: h.logPath, ladders: { rpm: [1_000] } })
-  const after = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 1 })
+  const after = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 2 })
   h.emit(after)
   assert.ok(after.decision.retry === true)
   assert.ok(after.decision.delay >= 700 && after.decision.delay <= 1_300, String(after.decision.delay))
 
   h.writeConfig({ enabled: true, logPath: h.logPath })
-  const reset = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 1 })
+  const reset = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 2 })
   h.emit(reset)
   assert.ok(reset.decision.retry === true)
   assert.ok(reset.decision.delay >= 2_100 && reset.decision.delay <= 3_900, String(reset.decision.delay))
@@ -219,13 +219,13 @@ test("AC8 hook: a half-written config keeps the ladder that was working", async 
   const h = await createHarness(t)
   h.writeConfig({ enabled: true, logPath: h.logPath, ladders: { rpm: [1_000] } })
 
-  const before = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 1 })
+  const before = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 2 })
   h.emit(before)
   assert.ok(before.decision.retry === true)
   assert.ok(before.decision.delay >= 700 && before.decision.delay <= 1_300, String(before.decision.delay))
 
   h.writeRawConfig('{"enabled": true, "ladders": {"rpm": [')
-  const during = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 1 })
+  const during = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 2 })
   h.emit(during)
   assert.ok(during.decision.retry === true)
   assert.ok(during.decision.delay >= 700 && during.decision.delay <= 1_300, String(during.decision.delay))
@@ -235,7 +235,7 @@ test("AC8 hook: malformed ladder entries fall back to the built-in row", async (
   const h = await createHarness(t)
   h.writeConfig({ enabled: true, logPath: h.logPath, ladders: { rpm: ["soon", 0, null] } })
 
-  const event = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 1 })
+  const event = makeEvent({ message: "rpm_rate_limit_exceeded", attempt: 2 })
   h.emit(event)
   assert.ok(event.decision.retry === true)
   assert.ok(event.decision.delay >= 2_100 && event.decision.delay <= 3_900, String(event.decision.delay))
@@ -270,7 +270,7 @@ test("AC9 trace: a 2000 character message is truncated to 512", async (t) => {
   const h = await createHarness(t)
   h.writeConfig({ enabled: true, logPath: h.logPath })
 
-  const event = makeEvent({ message: `request rate limit exceeded ${"x".repeat(2_000)}`, attempt: 1 })
+  const event = makeEvent({ message: `request rate limit exceeded ${"x".repeat(2_000)}`, attempt: 2 })
   h.emit(event)
 
   const message = loggedMessage(h.lines().at(0) as string)

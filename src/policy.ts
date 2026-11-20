@@ -273,9 +273,11 @@ export type LadderDecision =
 /**
  * Turn `(classification, attempt)` into a retry decision.
  *
- * `attempt` is the physical attempt that just failed: the initial request is 1.
- * The ladder index is `max(0, attempt - 2)` so attempt 1 and attempt 2 both use
- * the first tier, and the cap counts issued retries (`attempt - 1`).
+ * OpenCode calls the retry hook only after its own policy proposes a retry, and
+ * it bumps the attempt counter before reporting it: the first failure arrives
+ * as `attempt = 2`, and the nth retry as `attempt = n + 1`. So the tier index
+ * and the number of retries already scheduled are both `attempt - 2`; the
+ * `max(0, ...)` clamp only guards a defensive `attempt = 1`.
  */
 export function ladder(
   classification: Pick<Classification, "kind" | "bases" | "cap">,
@@ -285,7 +287,7 @@ export function ladder(
   if (classification.kind !== "retry") return { retry: false, veto: "kind" }
 
   const physicalAttempt = Number.isFinite(attempt) ? Math.max(1, Math.floor(attempt)) : 1
-  if (physicalAttempt - 1 >= classification.cap) return { retry: false, veto: "cap" }
+  if (physicalAttempt - 2 >= classification.cap) return { retry: false, veto: "cap" }
 
   const bases = classification.bases.length > 0 ? classification.bases : UNKNOWN_RULE.bases
   const index = Math.min(Math.max(0, physicalAttempt - 2), bases.length - 1)

@@ -124,8 +124,8 @@ test("AC2: every retryable row maps to its category and cap", () => {
       assert.equal(classification.category, group.category, message)
       assert.equal(classification.cap, group.cap, message)
 
-      assert.equal(ladder(classification, group.cap, () => 0.5).retry, true, message)
-      assert.deepEqual(ladder(classification, group.cap + 1, () => 0.5), { retry: false, veto: "cap" }, message)
+      assert.equal(ladder(classification, group.cap + 1, () => 0.5).retry, true, message)
+      assert.deepEqual(ladder(classification, group.cap + 2, () => 0.5), { retry: false, veto: "cap" }, message)
     }
   }
 })
@@ -138,10 +138,11 @@ test("AC2: an unrecognized error gets one 5s retry and then fails", () => {
   assert.deepEqual(classification.bases, UNKNOWN_RULE.bases)
   assert.equal(classification.delayMs, 5_000)
 
-  const first = ladder(classification, 1, () => 0.5)
+  const first = ladder(classification, 2, () => 0.5)
   assert.equal(first.retry, true)
   assert.equal(first.delay, 5_000)
-  assert.deepEqual(ladder(classification, 2, () => 0.5), { retry: false, veto: "cap" })
+  assert.equal(first.index, 0)
+  assert.deepEqual(ladder(classification, 3, () => 0.5), { retry: false, veto: "cap" })
 })
 
 test("AC2: a long quota outranks a retryable phrase in the same message", () => {
@@ -161,28 +162,55 @@ test("AC2: a missing or empty error still lands on the unrecognized row", () => 
   }
 })
 
-test("AC3: the ladder index is max(0, attempt - 2)", () => {
+test("AC3: the hook sees attempt=2 first, so the tier index is attempt - 2", () => {
   const rpm = classify({ message: "rpm_rate_limit_exceeded" })
   assert.equal(rpm.cap, 9)
 
-  for (let attempt = 1; attempt <= rpm.cap; attempt += 1) {
+  for (let attempt = 2; attempt <= rpm.cap + 1; attempt += 1) {
     const decision = ladder(rpm, attempt, () => 0.5)
     assert.equal(decision.retry, true, `attempt ${attempt}`)
-    assert.equal(decision.index, Math.min(Math.max(0, attempt - 2), rpm.bases.length - 1))
+    assert.equal(decision.index, attempt - 2, `attempt ${attempt}`)
     assert.equal(decision.delay, rpm.bases[decision.index])
+    assert.ok(decision.index <= rpm.bases.length - 1)
   }
 
-  assert.equal(ladder(rpm, 1, () => 0).index, 0)
-  assert.equal(ladder(rpm, 2, () => 0).index, 0)
-  assert.equal(ladder(rpm, 3, () => 0).index, 1)
-  assert.deepEqual(ladder(rpm, rpm.cap + 1, () => 0.5), { retry: false, veto: "cap" })
+  assert.equal(ladder(rpm, 1, () => 0).index, 0, "defensive attempt=1 stays on the first tier")
+  assert.deepEqual(ladder(rpm, rpm.cap + 2, () => 0.5), { retry: false, veto: "cap" })
+})
+
+test("AC3: every category reaches its last tier, then is vetoed one attempt later", () => {
+  const LAST_TIERS = [
+    { category: "qps", message: "user_rate_limit_exceeded", last: 20_000 },
+    { category: "rpm", message: "coding_plan_rate_limit_exceeded", last: 90_000 },
+    { category: "tpm", message: "tpm_rate_limit_exceeded", last: 90_000 },
+    { category: "cluster_capacity", message: "coding_plan_cluster_rate_limited", last: 120_000 },
+    { category: "server_error", message: "internal_error", last: 16_000 },
+  ]
+
+  for (const row of LAST_TIERS) {
+    const classification = classify({ message: row.message })
+    assert.equal(classification.category, row.category)
+    assert.equal(classification.bases.length, classification.cap, row.category)
+    assert.equal(classification.bases.at(-1), row.last, row.category)
+
+    const last = ladder(classification, classification.cap + 1, () => 0.5)
+    assert.equal(last.retry, true, row.category)
+    assert.equal(last.index, classification.bases.length - 1, row.category)
+    assert.equal(last.delay, row.last, row.category)
+
+    assert.deepEqual(
+      ladder(classification, classification.cap + 2, () => 0.5),
+      { retry: false, veto: "cap" },
+      row.category,
+    )
+  }
 })
 
 test("AC3: every served tier stays inside its 0.7x..1.3x band", () => {
   for (const group of RETRY_GROUPS) {
     for (const message of group.messages) {
       const classification = classify({ message })
-      for (let attempt = 1; attempt <= classification.cap; attempt += 1) {
+      for (let attempt = 2; attempt <= classification.cap + 1; attempt += 1) {
         for (const r of [0, 0.5, 1]) {
           const decision = ladder(classification, attempt, () => r)
           assert.equal(decision.retry, true)
@@ -206,19 +234,19 @@ test("AC3: a mixed QPS/RPM/TPM chain cannot exceed the total retry budget", () =
   ]
 
   const allowed: number[] = []
-  for (let attempt = 1; attempt <= 15; attempt += 1) {
-    const classification = cycle[(attempt - 1) % cycle.length]
+  for (let attempt = 2; attempt <= 16; attempt += 1) {
+    const classification = cycle[(attempt - 2) % cycle.length]
     const decision = ladder(classification, attempt, () => 0.5)
     assert.equal(
       decision.retry,
-      attempt - 1 < classification.cap,
+      attempt - 2 < classification.cap,
       `attempt ${attempt} (${classification.category})`,
     )
     if (decision.retry) allowed.push(attempt)
     else assert.equal(decision.veto, "cap")
   }
 
-  assert.deepEqual(allowed, [1, 2, 3, 4, 5, 6, 7])
+  assert.deepEqual(allowed, [2, 3, 4, 5, 6, 7, 8])
   assert.ok(allowed.length <= MAX_RETRIES)
   assert.equal(MAX_RETRIES, 9)
 })
@@ -226,12 +254,12 @@ test("AC3: a mixed QPS/RPM/TPM chain cannot exceed the total retry budget", () =
 test("AC3: one category alone reaches exactly nine retries, never ten", () => {
   const rpm = classify({ message: "coding_plan_rate_limit_exceeded" })
   const allowed: number[] = []
-  for (let attempt = 1; attempt <= 12; attempt += 1) {
+  for (let attempt = 2; attempt <= 12; attempt += 1) {
     if (ladder(rpm, attempt, () => 0.5).retry) allowed.push(attempt)
   }
+  assert.deepEqual(allowed, [2, 3, 4, 5, 6, 7, 8, 9, 10])
   assert.equal(allowed.length, 9)
-  assert.equal(allowed.at(-1), 9)
-  assert.equal(ladder(rpm, 10, () => 0.5).retry, false)
+  assert.equal(ladder(rpm, 11, () => 0.5).retry, false)
 })
 
 const TIER_BASES = [...new Set(MATRIX.flatMap((rule) => rule.bases))].sort((a, b) => a - b)
