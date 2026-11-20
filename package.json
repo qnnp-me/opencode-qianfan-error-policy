@@ -1,0 +1,21 @@
+{
+  "name": "opencode-qianfan-error-policy",
+  "version": "0.1.0",
+  "description": "OpenCode v2 server plugin: classify Baidu Qianfan errors and retry minute-level rate limits with a jittered ladder",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=22.18.0"
+  }
+}
